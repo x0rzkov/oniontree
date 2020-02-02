@@ -13,9 +13,15 @@ import (
 	"gopkg.in/yaml.v3"
 	"github.com/blevesearch/bleve"
 	log "github.com/sirupsen/logrus"
+	"github.com/blevesearch/bleve/analysis/analyzer/custom"
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
+	"github.com/blevesearch/bleve/analysis/token/camelcase"
+	"github.com/blevesearch/bleve/analysis/token/lowercase"
+	"github.com/blevesearch/bleve/analysis/tokenizer/web"
+	"github.com/blevesearch/bleve/analysis/char/html"
 	"github.com/onionltd/oniontree-tools/pkg/types/service"
 	"github.com/spf13/pflag"
+	"github.com/iancoleman/strcase"
 )
 
 var (
@@ -34,6 +40,7 @@ type Tag struct {
 
 type Service struct {
 	Name        string       `json:"name" yaml:"name"`
+	Alias     	string     	 `json:"alias" yaml:"alias"`
 	Slug        string       `json:"slug,omitempty" yaml:"slug,omitempty"`
 	Description string       `json:"description,omitempty" yaml:"description,omitempty"`
 	URLs        []*URL       `json:"urls,omitempty" yaml:"urls,omitempty"`
@@ -80,13 +87,31 @@ func main() {
 	kwFieldMapping := bleve.NewTextFieldMapping()
 	kwFieldMapping.Analyzer = keyword.Name
 
+	mapping := bleve.NewIndexMapping()
+
+	//tokenizers
+	resultAnalyser := "resultAnalyser"
+	if err := mapping.AddCustomAnalyzer(resultAnalyser, map[string]interface{}{
+		"type":          custom.Name,
+		"char_filters":  []string{html.Name},
+		"tokenizer":     web.Name,
+		"token_filters": []string{camelcase.Name, lowercase.Name},
+	}); err != nil {
+		log.Fatal(err)
+	}
+
+	// field mapping types
+	keywordContent := bleve.NewTextFieldMapping()
+	keywordContent.Analyzer = resultAnalyser
+
 	svcMapping := bleve.NewDocumentMapping()
-	svcMapping.AddFieldMappingsAt("Name", enFieldMapping)
+	svcMapping.AddFieldMappingsAt("Name", keywordContent)
+	svcMapping.AddFieldMappingsAt("Alias", keywordContent)
 	svcMapping.AddFieldMappingsAt("Description", enFieldMapping)
 	svcMapping.AddFieldMappingsAt("URLs.Href", kwFieldMapping)
-	svcMapping.AddFieldMappingsAt("Tags.Name", kwFieldMapping)
+	svcMapping.AddFieldMappingsAt("Tags.Name", keywordContent)
 
-	mapping := bleve.NewIndexMapping()
+	// mapping := bleve.NewIndexMapping()
 	mapping.DefaultMapping = svcMapping
 
 	index, err := bleve.NewMemOnly(mapping)
@@ -174,6 +199,7 @@ func dirWalkServices(dirname string) (map[string]*Service) {
 
 				// add service
 				m := &Service{
+					Alias: 		 strcase.ToDelimited(t.Name, ' '),
 					Name:        t.Name,
 					Description: t.Description,
 					Slug:        slugName,
