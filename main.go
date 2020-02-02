@@ -1,7 +1,7 @@
 package main
 
 import (
-	// "os"
+	"os"
 	"fmt"
 	"strings"
 	stdioutil "io/ioutil"
@@ -15,11 +15,15 @@ import (
 	log "github.com/sirupsen/logrus"
 	"github.com/blevesearch/bleve/analysis/analyzer/keyword"
 	"github.com/onionltd/oniontree-tools/pkg/types/service"
+	"github.com/spf13/pflag"
 )
 
 var (
 	debugMode = false
 	publicKeys = false
+	query string
+	debug           bool
+	help            bool
 )
 
 
@@ -53,6 +57,23 @@ type PublicKey struct {
 }
 
 func main() {
+
+	pflag.BoolVarP(&debug, "debug", "d", false, "debug mode")
+	pflag.BoolVarP(&help, "help", "h", false, "help info")
+	pflag.Parse()
+	if help {
+		pflag.PrintDefaults()
+		os.Exit(1)
+	}
+
+	args := pflag.Args()
+	if len(args) == 0 {
+		log.Fatal("no patterns passed")
+	}
+
+	queryStr := strings.Join(args, " ")
+	pp.Println(queryStr)
+
 	enFieldMapping := bleve.NewTextFieldMapping()
 	enFieldMapping.Analyzer = "en"
 
@@ -85,7 +106,7 @@ func main() {
 	}
 
 	// Query string
-	query := bleve.NewQueryStringQuery("torum")
+	query := bleve.NewQueryStringQuery(queryStr)
 
 	// Simple text search
 	searchRequest := bleve.NewSearchRequest(query)
